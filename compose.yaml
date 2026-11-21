@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      VC_DEMO: "${VC_DEMO:-0}"
+    volumes:
+      - data:/app/var
+    restart: unless-stopped
+volumes:
+  data:

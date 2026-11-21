@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: emporia-venturecheck
+    runtime: docker
+    plan: starter
+    healthCheckPath: /
+    disk:
+      name: emporia-data
+      mountPath: /app/var
+      sizeGB: 1
+    envVars:
+      - key: VC_DB
+        value: /app/var/college-event.sqlite
+      - key: VC_DEMO
+        value: "0"
+      - key: VC_SECURE_COOKIE
+        value: "1"
