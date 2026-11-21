@@ -78,11 +78,11 @@ export function application(path?:string){
     }
     return id;
   });
-  const attempts=new Map<string,{count:number;until:number}>();
+
   const snapshot=(id:string|null):Benchmark[]=>id?unpack(get('SELECT data FROM snapshots WHERE id=?',id)?.data??'[]'):[];
   const event=(id:string)=>get('SELECT * FROM events WHERE id=?',id)??fail(404,'Event does not exist.');
   const latest=(id:string)=>get('SELECT * FROM submissions WHERE startup_id=? ORDER BY version DESC LIMIT 1',id);
-  const secure=process.env.VC_SECURE_COOKIE==='1'?'; Secure':'';
+  const secure=(process.env.VC_SECURE_COOKIE==='1'||process.env.VERCEL==='1')?'; Secure':'';
   const sessionCookie=(token:string,max:number)=>'vc_session='+token+'; HttpOnly; SameSite=Strict; Path=/; Max-Age='+max+secure;
   const revisionOpen=(id:string)=>Boolean(get('SELECT 1 FROM revision_windows WHERE startup_id=? AND enabled=1',id));
   function decision(id:string){
@@ -282,7 +282,7 @@ export function application(path?:string){
     }
     fail(404,'Action does not exist.');
   }
-  const server=createServer(async(req,res)=>{
+  const handle=async(req:IncomingMessage,res:ServerResponse)=>{
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Referrer-Policy','same-origin');
@@ -313,13 +313,13 @@ export function application(path?:string){
         if(typeof pass!=='string'||pass.length<1||pass.length>200) fail(400,'Enter a valid password.');
         const key=req.socket.remoteAddress??'local';
         const time=Date.now();
-        for(const [address,state] of attempts) if(state.until<time) attempts.delete(address);
-        const state=attempts.get(key)??{count:0,until:time+60000};
+        run('DELETE FROM login_attempts WHERE until_ms<?',time);
+        const state=get('SELECT count,until_ms FROM login_attempts WHERE address=?',key)??{count:0,until_ms:time+60000};
         requireRule(state.count<15,'Too many attempts. Try again in one minute.',429);
         const user=get('SELECT * FROM users WHERE email=?',email);
         const accepted=verify(pass,user?.hash??fakeHash)&&!(user&&get('SELECT 1 FROM disabled_accounts WHERE user_id=?',user.id));
-        if(!user||!accepted){state.count++;attempts.set(key,state); fail(401,'Email or password is incorrect.');}
-        attempts.delete(key);
+        if(!user||!accepted){run('INSERT OR REPLACE INTO login_attempts VALUES (?,?,?)',key,state.count+1,state.until_ms); fail(401,'Email or password is incorrect.');}
+        run('DELETE FROM login_attempts WHERE address=?',key);
         run('DELETE FROM sessions WHERE expires<?',time);
         if(token) run('DELETE FROM sessions WHERE token=?',digest(token));
         const newToken=randomBytes(32).toString('hex');
@@ -421,9 +421,10 @@ export function application(path?:string){
       }
       json(res,{error:(error as Error).message??'Request failed.'},error instanceof HttpError?error.status:400);
     }
-  });
+  };
+  const server=createServer(handle);
   server.on('close',()=>db.close());
-  return {server,db};
+  return {server,db,handle};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const {server}=application();
