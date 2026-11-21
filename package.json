@@ -14,5 +14,8 @@
     "backup": "node --experimental-strip-types src/backup.ts",
     "organizer": "node --experimental-strip-types src/organizer.ts",
     "host:event": "VC_DEMO=0 HOST=0.0.0.0 PORT=${PORT:-3100} VC_DB=${VC_DB:-var/college-event-test.sqlite} node --experimental-strip-types src/server.ts"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
   }
 }

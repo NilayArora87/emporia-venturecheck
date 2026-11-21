@@ -4,7 +4,7 @@ VentureCheck is an offline-capable web app for an Indian college startup-pitch e
 
 ## Run the demo
 
-Requires Node.js 22.17 or newer. There are no npm dependencies to install.
+Requires Node.js 22.17 or newer. Install dependencies with `npm ci` before running the complete test suite.
 
 ```sh
 npm run migrate
@@ -164,3 +164,30 @@ Use that restored database path on future restarts. Take an extra copy on a sepa
 In **Admin panel → Team monitor → Marks & eligibility**, enter a whole mark from 0 to 100 and save. A blank entry clears the mark. Marks apply to the team for the event and carry across revised pitches. In the organizer comparison, one admin mark carries the same weight as one completed judge scorecard. Judges retain their personal comparisons.
 
 Disqualifying a team closes pitch editing, submissions and judge scoring and excludes it from ranking. An admin can reinstate it. Its previous submissions, marks and reviews remain available. Resetting the event clears team marks and eligibility decisions.
+
+## Free Vercel deployment for Emporia 5.0
+
+Import this repository into a personal Vercel Hobby project. Choose the Other framework preset and Node 24.x. Static files are served from `public`. The API requires a persistent database. In the project's Storage tab, connect a **free Neon Postgres database** to the Production environment. Check that the integration added the pooled `DATABASE_URL`. Use a separate database for any preview environment you enable.
+
+In Vercel Settings → Environment Variables, add `VC_ADMIN_EMAIL` and `VC_ADMIN_PASSWORD` (a unique 12–200 character secret, marked Sensitive) for Production. Keep `VC_DEMO=0`. Deploy or redeploy after changing environment variables. The first API request creates an empty Emporia event and its organizer. After successful organizer login, remove the bootstrap password and redeploy. Existing credentials continue working. Existing laptop event records require a private migration. Never upload an event database to GitHub.
+
+The function opens a temporary SQLite working copy and commits a compressed image to the private Postgres table `vc_event_images` before acknowledging a write. A Postgres transaction lock serializes writers across function instances. An interrupted write rolls back. Each API call reads the current image, so database transfer grows with attendance and submission size. This setup targets one small college event. Check remaining free storage, transfer and compute quotas before pitch day.
+
+For a backup, download the live image privately using the command below from a trusted shell with `DATABASE_URL` set. Reset backups have names starting with `before-reset-` in the same table. To restore, stop event writes and use the same transaction lock while replacing the live image with the selected backup.
+
+```bash
+psql "$DATABASE_URL" -Atc "SELECT encode(image,'hex') FROM vc_event_images WHERE name='live'" | xxd -r -p | gzip -dc > event-backup.sqlite
+```
+
+```sql
+BEGIN;
+SELECT pg_advisory_xact_lock(551002);
+-- Substitute an existing backup name and confirm UPDATE 1 before COMMIT.
+UPDATE vc_event_images SET image=b.image FROM vc_event_images b
+WHERE vc_event_images.name='live' AND b.name='before-reset-YOUR-REQUEST-ID';
+COMMIT;
+```
+
+To run the cloud integration test, set `VC_TEST_DATABASE_URL` to a disposable PostgreSQL database URL with schema creation privileges and run `npm test`. It creates and removes an isolated test schema.
+
+Before sharing the URL, sign in as organizer, create a test team and judge, submit a pitch, and verify the submission and score after a redeploy. A reachable homepage alone only checks static hosting.
