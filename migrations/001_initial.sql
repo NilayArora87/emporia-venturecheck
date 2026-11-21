@@ -1,0 +1,12 @@
+CREATE TABLE users(id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('organizer','team','judge')));
+CREATE TABLE sessions(token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
+CREATE TABLE snapshots(id TEXT PRIMARY KEY, title TEXT NOT NULL, data TEXT NOT NULL, created TEXT NOT NULL, approved TEXT);
+CREATE TABLE events(id TEXT PRIMARY KEY, name TEXT NOT NULL, deadline TEXT NOT NULL, locked INTEGER NOT NULL DEFAULT 0, rubric TEXT NOT NULL, snapshot_id TEXT REFERENCES snapshots(id));
+CREATE TABLE startups(id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id), owner_id TEXT NOT NULL REFERENCES users(id), draft TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, updated TEXT NOT NULL);
+CREATE TABLE assignments(startup_id TEXT NOT NULL REFERENCES startups(id), judge_id TEXT NOT NULL REFERENCES users(id), PRIMARY KEY(startup_id,judge_id));
+CREATE TABLE submissions(id TEXT PRIMARY KEY, startup_id TEXT NOT NULL REFERENCES startups(id), version INTEGER NOT NULL, draft_revision INTEGER NOT NULL, engine TEXT NOT NULL, snapshot_id TEXT REFERENCES snapshots(id), plan TEXT NOT NULL, created TEXT NOT NULL, UNIQUE(startup_id,version));
+CREATE TABLE reviews(submission_id TEXT NOT NULL REFERENCES submissions(id), judge_id TEXT NOT NULL REFERENCES users(id), scores TEXT NOT NULL, notes TEXT NOT NULL, updated TEXT NOT NULL, PRIMARY KEY(submission_id,judge_id));
+CREATE TABLE scenarios(id TEXT PRIMARY KEY, submission_id TEXT NOT NULL REFERENCES submissions(id), judge_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL, case_name TEXT NOT NULL, overrides TEXT NOT NULL, UNIQUE(submission_id,judge_id,name));
+CREATE INDEX startups_event ON startups(event_id);
+CREATE INDEX submissions_latest ON submissions(startup_id, version DESC);
+CREATE INDEX assignments_judge ON assignments(judge_id);
